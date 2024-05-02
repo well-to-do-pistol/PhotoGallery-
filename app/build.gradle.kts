@@ -55,6 +55,7 @@ dependencies {
     // Dagger 2 dependencies
     implementation(libs.dagger)
     kapt(libs.dagger.compiler) // If using Kotlin, use kapt instead of annotationProcessor
+    //dagger2
     implementation(libs.gson)
     implementation(libs.retrofitGsonConverter)
     implementation(libs.retrofit.scalars.converter)

@@ -1,11 +1,17 @@
 package com.bignerdranch.android.photogallery
 
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.os.Handler
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
@@ -25,12 +31,27 @@ class PhotoGalleryFragment : Fragment() {
 
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
     private lateinit var photoRecyclerView: RecyclerView
+    private lateinit var thumbnailDownloader: ThumbnailDownloader<PhotoHolder>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        retainInstance = true //配置改变不会销毁, 最好不要保留
+
         photoGalleryViewModel =
             ViewModelProvider(this).get(PhotoGalleryViewModel::class.java)
+
+        //直接将观察者添加给fragment的lifestyle, 让它接受fragment的生命周期回调函数
+        val responseHandler = Handler() //Handler自动与线程关联(Looper绑定), 现在是在fragment的onCreate上所以和主线程Looper绑定
+        thumbnailDownloader =
+            ThumbnailDownloader(responseHandler) { photoHolder, bitmap ->
+//                Inside the lambda, a `BitmapDrawable` is created from the bitmap, and this drawable is set on the photo holder using the `bindDrawable` method.
+                val drawable = BitmapDrawable(resources, bitmap)
+//                这是指与应用程序或活动上下文关联的“Resources”实例。 Android 中的“Resources”类提供对应用程序原始资源文件的访问； 这包括本地化的字符串、图形、布局文件定义等等。
+//                - 在这种情况下，“资源”主要用于获取有关设备屏幕密度的信息以及渲染图像时很重要的其他配置详细信息。 当您使用“Resources”对象创建“BitmapDrawable”时，除非另有指定，否则可绘制对象会根据当前屏幕的密度自动缩放。
+                photoHolder.bindDrawable(drawable)
+            }
+        lifecycle.addObserver(thumbnailDownloader.fragmentLifecycleObserver)
     }
 
     override fun onCreateView(
@@ -38,6 +59,10 @@ class PhotoGalleryFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        viewLifecycleOwner.lifecycle.addObserver(
+            thumbnailDownloader.viewLifecycleObserver
+        )
+
         val view = inflater.inflate(R.layout.fragment_photo_gallery, container, false)
 
         photoRecyclerView = view.findViewById(R.id.photo_recycler_view)
@@ -62,31 +87,51 @@ class PhotoGalleryFragment : Fragment() {
             })
     }
 
-    private class PhotoHolder(itemTextView: TextView)
-        : RecyclerView.ViewHolder(itemTextView) {
-
-        val bindTitle: (CharSequence) -> Unit = itemTextView::setText
-        //- **CharSequence**：这是一个表示字符序列的接口。 在 Java 和 Kotlin 中，“String”是“CharSequence”的常见类型。 因此，您可以将“String”传递给需要“CharSequence”的函数。
-        //- **bindTitle**：这是一个 lambda 函数，它接受 `CharSequence` 并返回 `Unit`。 lambda 函数被分配给 `itemTextView::setText`，它是 Kotlin 中的方法引用。 这意味着“bindTitle”将使用给定的任何“CharSequence”调用“itemTextView”上的“setText”方法。
-
+    override fun onDestroyView() {
+        super.onDestroyView()
+        viewLifecycleOwner.lifecycle.removeObserver(
+            thumbnailDownloader.viewLifecycleObserver
+        )
     }
 
-    private class PhotoAdapter(private val galleryItems: List<GalleryItem>)
+    override fun onDestroy() {
+        super.onDestroy()
+        lifecycle.removeObserver(
+            thumbnailDownloader.fragmentLifecycleObserver
+        )
+    }
+
+    private class PhotoHolder(private val itemImageView: ImageView)
+        : RecyclerView.ViewHolder(itemImageView) {
+        val bindDrawable: (Drawable) -> Unit  = itemImageView::setImageDrawable
+    }
+
+    //为拿到layoutInflater把adapter变成内部类, 还方便后面访问父activity的属性和函数
+    private inner class PhotoAdapter(private val galleryItems: List<GalleryItem>)
         : RecyclerView.Adapter<PhotoHolder>() {
 
         override fun onCreateViewHolder(
             parent: ViewGroup,
             viewType: Int
         ): PhotoHolder {
-            val textView = TextView(parent.context)
-            return PhotoHolder(textView)
+            val view = layoutInflater.inflate(
+                R.layout.list_item_gallery,
+                parent,
+                false
+            ) as ImageView
+            return PhotoHolder(view)
         }
 
         override fun getItemCount(): Int = galleryItems.size
 
         override fun onBindViewHolder(holder: PhotoHolder, position: Int) {
             val galleryItem = galleryItems[position]
-            holder.bindTitle(galleryItem.title)
+            val placeholder: Drawable = ContextCompat.getDrawable(
+                requireContext(),
+                R.drawable.bill_up_close
+            ) ?: ColorDrawable()
+            holder.bindDrawable(placeholder)
+            thumbnailDownloader.queueThumbnail(holder, galleryItem.url)
         }
     }
 

@@ -1,11 +1,15 @@
 package com.bignerdranch.android.photogallery
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
+import androidx.annotation.WorkerThread
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.bignerdranch.android.photogallery.api.FlickrApi
 import com.bignerdranch.android.photogallery.api.FlickrResponse
 import com.bignerdranch.android.photogallery.api.PhotoResponse
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -27,6 +31,17 @@ class FlickrFetchr {
             .build()
 
         flickrApi = retrofit.create(FlickrApi::class.java) // 创建 Flickr API 接口实例
+    }
+
+    @WorkerThread //该注解指定函数只能在后台线程上执行(网络请求)
+    fun fetchPhoto(url: String): Bitmap? {
+        val response: Response<ResponseBody> = flickrApi.fetchUrlBytes(url).execute()
+        //ResponseBody.byteStream得到InputStream
+        //BitmapFactory.decodeStream(InputStream)创建Bitmap对象
+        //响应流和字节流都应该被关闭, use函数会清理
+        val bitmap = response.body()?.byteStream()?.use(BitmapFactory::decodeStream)
+        Log.i(TAG, "Decoded bitmap=$bitmap from Response=$response")
+        return bitmap
     }
 
     fun fetchPhotos(): LiveData<List<GalleryItem>> {
