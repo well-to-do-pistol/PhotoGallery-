@@ -41,6 +41,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    runtimeOnly("androidx.lifecycle:lifecycle-extensions:2.2.0")
+    runtimeOnly("androidx.lifecycle:lifecycle-livedata-core:2.4.0")
+
+    implementation ("androidx.core:core-ktx:1.0.0")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
