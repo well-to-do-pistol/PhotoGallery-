@@ -31,13 +31,13 @@ class PollWorker(val context: Context, workerParams: WorkerParameters)
             FlickrFetchr().fetchPhotosRequest() //没有最后搜索字符串, 就获取一般最新图片 (先拿到Call)
                 .execute()
                 .body()
-                ?.photos
+//                ?.photos
                 ?.galleryItems
         } else {
             FlickrFetchr().searchPhotosRequest(query)//有最后搜索字符串, 就获取匹配字符串的最新图片 (先拿到Call)
                 .execute()
                 .body()
-                ?.photos
+//                ?.photos
                 ?.galleryItems
         } ?: emptyList()
 

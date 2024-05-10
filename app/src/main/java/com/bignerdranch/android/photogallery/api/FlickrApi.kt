@@ -12,11 +12,11 @@ interface FlickrApi {
 //    fun fetchContents(): Call<String> //String表示反序列化响应数据需要的类型
 
     @GET("services/rest?method=flickr.interestingness.getList")
-    fun fetchPhotos(): Call<FlickrResponse>
+    fun fetchPhotos(): Call<PhotoResponse>
 
     @GET //无参数的GET和@Url会让Retrofit覆盖基URL
     fun fetchUrlBytes(@Url url: String): Call<ResponseBody>
 
     @GET("services/rest?method=flickr.photos.search")
-    fun searchPhotos(@Query("text") query: String): Call<FlickrResponse> //Query允许动态拼接
+    fun searchPhotos(@Query("text") query: String): Call<PhotoResponse> //Query允许动态拼接
 }
