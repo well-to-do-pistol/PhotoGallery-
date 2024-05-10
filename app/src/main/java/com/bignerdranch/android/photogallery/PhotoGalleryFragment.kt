@@ -20,7 +20,9 @@ import androidx.appcompat.widget.SearchView
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -50,6 +52,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
     private lateinit var photoRecyclerView: RecyclerView
     private lateinit var thumbnailDownloader: ThumbnailDownloader<PhotoHolder>
+    private val lifecycleEvents = MutableLiveData<Lifecycle.Event>()
     private lateinit var progressBar: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,7 +74,8 @@ class PhotoGalleryFragment : VisibleFragment() {
 //                - 在这种情况下，“资源”主要用于获取有关设备屏幕密度的信息以及渲染图像时很重要的其他配置详细信息。 当您使用“Resources”对象创建“BitmapDrawable”时，除非另有指定，否则可绘制对象会根据当前屏幕的密度自动缩放。
                 photoHolder.bindDrawable(drawable)
             }
-        lifecycle.addObserver(thumbnailDownloader.fragmentLifecycleObserver)
+        thumbnailDownloader.observeLifecycleEvents(lifecycleEvents)
+        lifecycleEvents.value = Lifecycle.Event.ON_CREATE
     }
 
     override fun onCreateView(
@@ -79,9 +83,6 @@ class PhotoGalleryFragment : VisibleFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        viewLifecycleOwner.lifecycle.addObserver(
-            thumbnailDownloader.viewLifecycleObserver
-        )
 
         val view = inflater.inflate(R.layout.fragment_photo_gallery, container, false)
         progressBar = view.findViewById(R.id.photo_gallery_progress_bar)
@@ -113,16 +114,12 @@ class PhotoGalleryFragment : VisibleFragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        viewLifecycleOwner.lifecycle.removeObserver(
-            thumbnailDownloader.viewLifecycleObserver
-        )
+        thumbnailDownloader.clearQueue() //直接调用函数清理队列(无论下载图片还是装载图片)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        lifecycle.removeObserver(
-            thumbnailDownloader.fragmentLifecycleObserver
-        )
+        lifecycleEvents.value = Lifecycle.Event.ON_DESTROY
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {

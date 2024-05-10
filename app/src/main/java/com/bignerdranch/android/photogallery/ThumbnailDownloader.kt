@@ -8,6 +8,8 @@ import android.os.Message
 import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.OnLifecycleEvent
 import java.util.concurrent.ConcurrentHashMap
 
@@ -18,35 +20,30 @@ private const val MESSAGE_DOWNLOAD = 0
 class ThumbnailDownloader<in T>(
     private val responseHandler: Handler,
     private val onThumbnailDownloaded: (T, Bitmap) -> Unit //高阶函数, 定义成功下载缩略图后进行的操作(和Holder绑定)
-) : HandlerThread(TAG) {
+) : HandlerThread(TAG) , Observer<Lifecycle.Event> {
 
-    val fragmentLifecycleObserver: LifecycleObserver = //fragment实例监听器
-        object : LifecycleObserver {
+    fun observeLifecycleEvents(lifecycleEvents: LiveData<Lifecycle.Event>) { //传入带着Lifecycle.Event的LiveData
+        lifecycleEvents.observeForever(this) //观察LiveData, this为观察者因为ThumbnailDownloader继承了Observer<Lifecycle.Event>(生命周期观察者)
+    }
 
-            @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            fun setup() {
-                Log.i(TAG, "Starting background thread")
-                start() //启动当前线程
-                looper //访问Looper
+    override fun onChanged(value: Lifecycle.Event) {
+        when (value) {
+            Lifecycle.Event.ON_CREATE -> {
+                start()
+                looper
             }
-
-            @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-            fun tearDown() {
-                Log.i(TAG, "Destroying background thread")
-                quit() //停止当前线程
+            Lifecycle.Event.ON_DESTROY -> {
+                quit()
+                quitSafely() //使用LiveData自动结束扮演观察者角色
             }
+            else -> {}
         }
+    }
 
-    val viewLifecycleObserver: LifecycleObserver = //fragment视图监听器(因为选择保留了fragment, 所以设备旋转实例还在, 只能设置视图监听器清理下载队列中的请求(无论是请求图片还是装载图片)防止更新视图(找不到Holder))
-        object : LifecycleObserver {
-
-            @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-            fun clearQueue() {
-                Log.i(TAG, "Clearing all requests from queue")
-                requestHandler.removeMessages(MESSAGE_DOWNLOAD) //清理Message
-                requestMap.clear() //清理HashMap
-            }
-        }
+    fun clearQueue() {
+        requestHandler?.removeMessages(MESSAGE_DOWNLOAD)
+        requestMap.clear()
+    }
 
     private var hasQuit = false
     private lateinit var requestHandler: Handler //Android.os.Handler
