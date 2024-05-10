@@ -113,20 +113,20 @@ class PhotoGalleryFragment : VisibleFragment() {
             Observer { galleryItems ->
                 photoRecyclerView.adapter = PhotoAdapter(galleryItems)
 
-                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                        super.onScrolled(recyclerView, dx, dy)
-                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                        val totalItemCount = layoutManager.itemCount
-                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-
-                        // Check if we've reached the threshold to preload more images
-                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
-                            Log.i(TAG, "gsize: ${galleryItems.size}")
-                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
-                        }
-                    }
-                })
+//                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
+//                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+//                        super.onScrolled(recyclerView, dx, dy)
+//                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+//                        val totalItemCount = layoutManager.itemCount
+//                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+//
+//                        // Check if we've reached the threshold to preload more images
+//                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
+//                            Log.i(TAG, "gsize: ${galleryItems.size}")
+//                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
+//                        }
+//                    }
+//                })
 
                 preloadOne(galleryItems) //预加载一次
 
