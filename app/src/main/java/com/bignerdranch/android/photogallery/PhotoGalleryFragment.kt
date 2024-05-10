@@ -138,7 +138,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     private fun preloadOne(galleryItems: List<GalleryItem>) { //预加载函数
-        galleryItems.take(10).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+        galleryItems.take(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
         galleryItems.takeLast(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
     }
 
@@ -295,7 +295,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     companion object {
-        const val PRELOAD_THRESHOLD = 9 // Start preloading 20 items before reaching the last visible item
+        const val PRELOAD_THRESHOLD = 15 // Start preloading 20 items before reaching the last visible item
         const val PRELOAD_AMOUNT = 25 // Number of items to preload
         fun newInstance() = PhotoGalleryFragment()
     }

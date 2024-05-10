@@ -23,7 +23,16 @@ class ThumbnailDownloader<in T>(
     private val responseHandler: Handler,
     private val onThumbnailDownloaded: (T, Bitmap) -> Unit //高阶函数, 定义成功下载缩略图后进行的操作(和Holder绑定)
 ) : HandlerThread(TAG) , Observer<Lifecycle.Event> {
-    private var lruCache: LruCache<String, Bitmap>
+    private var lruCache: LruCache<String, Bitmap>  //lruCache缓存
+
+    private var hasQuit = false
+    private lateinit var requestHandler: Handler //Android.os.Handler
+    private lateinit var preloadHandler: Handler //预加载的Handler
+    private val preloadThread = HandlerThread("ThumbnailPreloader") //预加载自己线程HandlerThread
+
+    private val requestMap = ConcurrentHashMap<T, String>() //线程安全的HashMap
+    private val flickrFetchr = FlickrFetchr() //发起一个网络请求就创建并配置一个Retrofit新实例
+    private val preloadRequestSet = ConcurrentHashMap<String, Boolean>() //并发哈希映射(已经预加载的图片, 避免重复预加载)
 
     init {
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt() // Use 1/8th of available memory for cache
@@ -40,6 +49,7 @@ class ThumbnailDownloader<in T>(
         when (value) {
             Lifecycle.Event.ON_CREATE -> {
                 start()
+                preloadThread.start() //预加载线程启动
                 looper
             }
             Lifecycle.Event.ON_DESTROY -> {
@@ -55,26 +65,34 @@ class ThumbnailDownloader<in T>(
         requestMap.clear()
     }
 
-    private var hasQuit = false
-    private lateinit var requestHandler: Handler //Android.os.Handler
-    private val requestMap = ConcurrentHashMap<T, String>() //线程安全的HashMap
-    private val flickrFetchr = FlickrFetchr() //发起一个网络请求就创建并配置一个Retrofit新实例
-    private val preloadRequestSet = ConcurrentHashMap<String, Boolean>() //并发哈希映射(已经预加载的图片, 避免重复预加载)
-
     @Suppress("UNCHECKED_CAST")  //告诉Lint不用做类型匹配检查, 可以强制转换
     @SuppressLint("HandlerLeak") //这里创建了内部类Handler, 它天然持有外部类ThumbnailDownloader
     override fun onLooperPrepared() { //HandlerThread.onLooperPrepared()会在(后台)Looper首次检查消息队列之前调用, 所以该函数是创建Handler实现的好地方
-        requestHandler = object : Handler() {
-            override fun handleMessage(msg: Message) { //handleMessage在消息队列中的下载请求被取出并可以处理时调用
-                when (msg.what) {
-                    MESSAGE_DOWNLOAD -> {
-                        val target = msg.obj as T
-                        Log.i(TAG, "Got a request for URL: ${requestMap[target]}")
-                        processDownload(target)
-                    }
-                    MESSAGE_PRELOAD -> processPreload(msg.obj as String)
-                }
+//        requestHandler = object : Handler() {
+//            override fun handleMessage(msg: Message) { //handleMessage在消息队列中的下载请求被取出并可以处理时调用
+//                when (msg.what) {
+//                    MESSAGE_DOWNLOAD -> {
+//                        val target = msg.obj as T
+//                        Log.i(TAG, "Got a request for URL: ${requestMap[target]}")
+//                        processDownload(target)
+//                    }
+//                    MESSAGE_PRELOAD -> processPreload(msg.obj as String)
+//                }
+//            }
+//        }
+        requestHandler = Handler(looper) {
+            if (it.what == MESSAGE_DOWNLOAD) {
+                val target = it.obj as T
+                processDownload(target)
             }
+            true
+        }
+
+        preloadHandler = Handler(preloadThread.looper) {
+            if (it.what == MESSAGE_PRELOAD) {
+                processPreload(it.obj as String)
+            }
+            true
         }
     } //非静态内部类隐式保有对外部类的引用, 如果添加到主线程(那么保留在内部类的外部类引用就会长期存在, 导致其实例不能被正常回收)
     //只会有一个requestHandler负责处理循环队列的消息
@@ -90,6 +108,7 @@ class ThumbnailDownloader<in T>(
 
     override fun quit(): Boolean {
         hasQuit = true
+        preloadThread.quit() //预加载线程退出
         return super.quit()
     }
 
@@ -106,24 +125,9 @@ class ThumbnailDownloader<in T>(
 
     fun preloadThumbnail(url: String) {
         if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
-            requestHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget()
+//            requestHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget()
+            preloadHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget() //放进自己的预加载线程
         } //第一次请求, 只是下载图片就够了
-    }
-
-    private fun handleRequest(target: T) {
-        val url = requestMap[target] ?: return
-        val bitmap = flickrFetchr.fetchPhoto(url) ?: return //图片url会覆盖基url所以相当于使用了独立的网络请求
-
-        //发布Message的便利函数
-        responseHandler.post(Runnable { //在主线程上执行, (因为responseHandler和主线程Looper绑定)
-            if (requestMap[target] != url || hasQuit) { //1.确保RecyclerView的视图持有者未被回收或在拿到bitmap后没有更新请求
-                //2.确保后台线程没有退出, “hasQuit”检查是一种保障措施，可确保执行 UI 更新的“Runnable”仅在从生命周期(应和关联组件生命周期相同)和资源管理角度(阻止回收)来看是适当且安全的情况下才会执行此操作
-                return@Runnable //指定返回来自Runnable lambda
-            }
-
-            requestMap.remove(target) //清理target和url
-            onThumbnailDownloaded(target, bitmap)
-        })
     }
 
     private fun handleRequest(target: T?, url: String, isPreload: Boolean) {
