@@ -19,6 +19,7 @@ import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
+import androidx.core.view.isGone
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LiveData
@@ -26,6 +27,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -43,6 +45,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
+import kotlin.math.min
 
 private const val TAG = "PhotoGalleryFragment"
 private const val POLL_WORK = "POLL_WORK"
@@ -109,7 +112,34 @@ class PhotoGalleryFragment : VisibleFragment() {
             viewLifecycleOwner,
             Observer { galleryItems ->
                 photoRecyclerView.adapter = PhotoAdapter(galleryItems)
+
+                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        super.onScrolled(recyclerView, dx, dy)
+                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+                        val totalItemCount = layoutManager.itemCount
+                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+
+                        // Check if we've reached the threshold to preload more images
+                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
+                            Log.i(TAG, "gsize: ${galleryItems.size}")
+                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
+                        }
+                    }
+                })
+
+                preloadOne(galleryItems) //预加载一次
+
             })
+    }
+
+    private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
+        galleryItems.forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+    }
+
+    private fun preloadOne(galleryItems: List<GalleryItem>) { //预加载函数
+        galleryItems.take(10).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+        galleryItems.takeLast(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
     }
 
     override fun onDestroyView() {
@@ -210,7 +240,8 @@ class PhotoGalleryFragment : VisibleFragment() {
             itemView.setOnClickListener(this) //继承, 重写, setOnClickListener三步棋, 喝水一样简单
         }
 
-        val bindDrawable: (Drawable) -> Unit  = itemImageView::setImageDrawable
+        val bindDrawable: (Drawable) -> Unit  =
+            itemImageView::setImageDrawable
 
         fun bindGalleryItem(item: GalleryItem) {
             galleryItem = item
@@ -264,6 +295,8 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     companion object {
+        const val PRELOAD_THRESHOLD = 9 // Start preloading 20 items before reaching the last visible item
+        const val PRELOAD_AMOUNT = 25 // Number of items to preload
         fun newInstance() = PhotoGalleryFragment()
     }
 }
