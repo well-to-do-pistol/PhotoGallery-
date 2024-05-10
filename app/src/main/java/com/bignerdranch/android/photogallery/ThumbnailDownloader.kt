@@ -17,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
 private const val TAG = "ThumbnailDownloader"
 private const val MESSAGE_DOWNLOAD = 0
 private const val MESSAGE_PRELOAD = 1
+private const val MESSAGE_SCROLL = 2
+private const val MESSAGE_FIRSTLOAD = 3
 
 //后台线程不能执行更新视图, 主线程不能执行耗时任务
 class ThumbnailDownloader<in T>(
@@ -28,7 +30,11 @@ class ThumbnailDownloader<in T>(
     private var hasQuit = false
     private lateinit var requestHandler: Handler //Android.os.Handler
     private lateinit var preloadHandler: Handler //预加载的Handler
+    private lateinit var firstloadHandler: Handler //预加载的Handler
+    private lateinit var scrollHandler: Handler //滚动预加载的Handler
     private val preloadThread = HandlerThread("ThumbnailPreloader") //预加载自己线程HandlerThread
+    private val scrollThread = HandlerThread("ThumbnailScroller") //滚动预加载自己线程ThumbnailScroller
+    private val firstloadThread = HandlerThread("Thumbnailfirster") //首次预加载自己线程ThumbnailScroller
 
     private val requestMap = ConcurrentHashMap<T, String>() //线程安全的HashMap
     private val flickrFetchr = FlickrFetchr() //发起一个网络请求就创建并配置一个Retrofit新实例
@@ -50,6 +56,8 @@ class ThumbnailDownloader<in T>(
             Lifecycle.Event.ON_CREATE -> {
                 start()
                 preloadThread.start() //预加载线程启动
+                scrollThread.start() //滚动预加载线程启动
+                firstloadThread.start() //首次预加载线程启动
                 looper
             }
             Lifecycle.Event.ON_DESTROY -> {
@@ -68,18 +76,6 @@ class ThumbnailDownloader<in T>(
     @Suppress("UNCHECKED_CAST")  //告诉Lint不用做类型匹配检查, 可以强制转换
     @SuppressLint("HandlerLeak") //这里创建了内部类Handler, 它天然持有外部类ThumbnailDownloader
     override fun onLooperPrepared() { //HandlerThread.onLooperPrepared()会在(后台)Looper首次检查消息队列之前调用, 所以该函数是创建Handler实现的好地方
-//        requestHandler = object : Handler() {
-//            override fun handleMessage(msg: Message) { //handleMessage在消息队列中的下载请求被取出并可以处理时调用
-//                when (msg.what) {
-//                    MESSAGE_DOWNLOAD -> {
-//                        val target = msg.obj as T
-//                        Log.i(TAG, "Got a request for URL: ${requestMap[target]}")
-//                        processDownload(target)
-//                    }
-//                    MESSAGE_PRELOAD -> processPreload(msg.obj as String)
-//                }
-//            }
-//        }
         requestHandler = Handler(looper) {
             if (it.what == MESSAGE_DOWNLOAD) {
                 val target = it.obj as T
@@ -91,6 +87,20 @@ class ThumbnailDownloader<in T>(
         preloadHandler = Handler(preloadThread.looper) {
             if (it.what == MESSAGE_PRELOAD) {
                 processPreload(it.obj as String)
+            }
+            true
+        }
+
+        firstloadHandler = Handler(firstloadThread.looper) {
+            if (it.what == MESSAGE_FIRSTLOAD) {
+                processFirstload(it.obj as String)
+            }
+            true
+        }
+
+        scrollHandler = Handler(scrollThread.looper) {
+            if (it.what == MESSAGE_SCROLL) {
+                scrollPreload(it.obj as String)
             }
             true
         }
@@ -106,9 +116,19 @@ class ThumbnailDownloader<in T>(
         handleRequest(null, url, true)
     }
 
+    private fun processFirstload(url: String) { //意思不用装载图片
+        handleRequest(null, url, true)
+    }
+
+    private fun scrollPreload(url: String) { //意思不用装载图片
+        handleRequest(null, url, true)
+    }
+
     override fun quit(): Boolean {
         hasQuit = true
         preloadThread.quit() //预加载线程退出
+        scrollThread.quit() //滚动预加载线程退出
+        firstloadThread.quit() //首次预加载线程退出
         return super.quit()
     }
 
@@ -125,8 +145,19 @@ class ThumbnailDownloader<in T>(
 
     fun preloadThumbnail(url: String) {
         if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
-//            requestHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget()
             preloadHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget() //放进自己的预加载线程
+        } //第一次请求, 只是下载图片就够了
+    }
+
+    fun firstloadThumbnail(url: String) {
+        if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
+            firstloadHandler.obtainMessage(MESSAGE_FIRSTLOAD, url).sendToTarget() //放进自己的预加载线程
+        } //第一次请求, 只是下载图片就够了
+    }
+
+    fun scrollThumbnail(url: String){
+        if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
+            scrollHandler.obtainMessage(MESSAGE_SCROLL, url).sendToTarget() //放进自己的预加载线程
         } //第一次请求, 只是下载图片就够了
     }
 

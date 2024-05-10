@@ -111,22 +111,24 @@ class PhotoGalleryFragment : VisibleFragment() {
             // 这可能会导致内存泄漏和不必要的更新。
             viewLifecycleOwner,
             Observer { galleryItems ->
+                firstpreload(galleryItems) //首次加载18张图片
+
                 photoRecyclerView.adapter = PhotoAdapter(galleryItems)
 
-//                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
-//                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-//                        super.onScrolled(recyclerView, dx, dy)
-//                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-//                        val totalItemCount = layoutManager.itemCount
-//                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-//
-//                        // Check if we've reached the threshold to preload more images
-//                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
-//                            Log.i(TAG, "gsize: ${galleryItems.size}")
-//                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
-//                        }
-//                    }
-//                })
+                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        super.onScrolled(recyclerView, dx, dy)
+                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+                        val totalItemCount = layoutManager.itemCount
+                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+
+                        // Check if we've reached the threshold to preload more images
+                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
+                            Log.i(TAG, "gsize: ${galleryItems.size}")
+                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
+                        }
+                    }
+                })
 
                 preloadOne(galleryItems) //预加载一次
 
@@ -134,12 +136,15 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
-        galleryItems.forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+        galleryItems.forEach { thumbnailDownloader.scrollThumbnail(it.url) }
     }
 
     private fun preloadOne(galleryItems: List<GalleryItem>) { //预加载函数
-//        galleryItems.take(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
         galleryItems.takeLast(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+    }
+
+    private fun firstpreload(galleryItems: List<GalleryItem>) { //预加载函数
+        galleryItems.subList(4,18).forEach { thumbnailDownloader.firstloadThumbnail(it.url) }
     }
 
     override fun onDestroyView() {
@@ -295,7 +300,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     companion object {
-        const val PRELOAD_THRESHOLD = 15 // Start preloading 20 items before reaching the last visible item
+        const val PRELOAD_THRESHOLD = 100 // Start preloading 20 items before reaching the last visible item
         const val PRELOAD_AMOUNT = 25 // Number of items to preload
         fun newInstance() = PhotoGalleryFragment()
     }
