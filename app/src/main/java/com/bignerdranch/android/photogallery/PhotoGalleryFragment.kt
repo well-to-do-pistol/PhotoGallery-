@@ -14,6 +14,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import androidx.browser.customtabs.CustomTabsIntent
@@ -49,6 +50,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
     private lateinit var photoRecyclerView: RecyclerView
     private lateinit var thumbnailDownloader: ThumbnailDownloader<PhotoHolder>
+    private lateinit var progressBar: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,7 +84,7 @@ class PhotoGalleryFragment : VisibleFragment() {
         )
 
         val view = inflater.inflate(R.layout.fragment_photo_gallery, container, false)
-
+        progressBar = view.findViewById(R.id.photo_gallery_progress_bar)
         photoRecyclerView = view.findViewById(R.id.photo_recycler_view)
         photoRecyclerView.layoutManager = GridLayoutManager(context, 3)
 
@@ -92,6 +94,10 @@ class PhotoGalleryFragment : VisibleFragment() {
     //观察ViewModel的LiveData
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) { //还要在UI相关部件(RecyclerView adapter)响应数据变化, 确保UI已初始化完成
         super.onViewCreated(view, savedInstanceState)
+        photoGalleryViewModel.isLoading.observe(viewLifecycleOwner, Observer { isLoading ->
+            progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        })
+
         photoGalleryViewModel.galleryItemLiveData.observe(
             //LifecycleOwner 负责根据组件（在本例中为片段）的生命周期状态观察 LiveData 的变化
             //如果您要将“this”（片段本身）作为“LifecycleOwner”传递：
@@ -131,6 +137,15 @@ class PhotoGalleryFragment : VisibleFragment() {
             setOnQueryTextListener(object : SearchView.OnQueryTextListener {
                 override fun onQueryTextSubmit(queryText: String): Boolean { //搜索提交时执行
                     Log.d(TAG, "QueryTextSubmit: $queryText")
+
+
+                    searchView.clearFocus() // Hide soft keyboard
+                    searchView.onActionViewCollapsed() // Collapse the SearchView
+
+                    // Clear RecyclerView immediately
+                    photoRecyclerView.adapter = PhotoAdapter(emptyList())  // Setting an empty adapter
+                    progressBar.visibility = View.VISIBLE // Show loading indicator
+
                     photoGalleryViewModel.fetchPhotos(queryText) //下载图片
                     return true
                 }
