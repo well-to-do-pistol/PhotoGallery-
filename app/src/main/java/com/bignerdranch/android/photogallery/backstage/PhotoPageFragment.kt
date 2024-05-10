@@ -18,7 +18,7 @@ private const val ARG_URI = "photo_page_url"
 class PhotoPageFragment : VisibleFragment() {
 
     private lateinit var uri: Uri
-    private lateinit var webView: WebView
+    internal lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
