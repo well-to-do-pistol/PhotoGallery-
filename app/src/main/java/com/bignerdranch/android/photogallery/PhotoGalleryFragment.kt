@@ -138,7 +138,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     private fun preloadOne(galleryItems: List<GalleryItem>) { //预加载函数
-        galleryItems.take(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
+//        galleryItems.take(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
         galleryItems.takeLast(50).forEach { thumbnailDownloader.preloadThumbnail(it.url) }
     }
 
