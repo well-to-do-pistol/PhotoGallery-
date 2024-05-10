@@ -72,4 +72,7 @@ dependencies {
     testImplementation("junit:junit:4.12")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.kotlinx.coroutines.play.services)
 }
