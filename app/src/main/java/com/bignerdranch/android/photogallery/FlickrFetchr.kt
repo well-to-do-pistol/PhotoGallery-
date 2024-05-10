@@ -28,12 +28,12 @@ class FlickrFetchr {
     init {
         val client = OkHttpClient.Builder()
             .addInterceptor(PhotoInterceptor())
-            .build() //先创建一个OkHttpClient, 再把拦截器添加给它
+            .build() //先创建一个OkHttpClient, 再把拦截器添加给它(共用常用键值对)
 
         // 初始化 Retrofit，设置基础 URL 和转换器工厂
         val retrofit: Retrofit = Retrofit.Builder()
             .baseUrl("https://api.flickr.com/")
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create()) //添加json解析器
             .client(client)
             .build()
 
@@ -51,14 +51,22 @@ class FlickrFetchr {
         return bitmap
     }
 
+    fun fetchPhotosRequest(): Call<FlickrResponse> { //暴露Call对象, 在init的时候已经配置好了
+        return flickrApi.fetchPhotos()
+    }
+
     fun fetchPhotos(): LiveData<List<GalleryItem>> {
         currentCall?.cancel() // 如果存在，取消之前的网络请求
-        return fetchPhotoMetadata(flickrApi.fetchPhotos())
+        return fetchPhotoMetadata(fetchPhotosRequest())
+    }
+
+    fun searchPhotosRequest(query: String): Call<FlickrResponse> { //暴露Call对象, 在init的时候已经配置好了
+        return flickrApi.searchPhotos(query)
     }
 
     fun searchPhotos(query: String): LiveData<List<GalleryItem>> {
         currentCall?.cancel() // 如果存在，取消之前的网络请求
-        return fetchPhotoMetadata(flickrApi.searchPhotos(query))
+        return fetchPhotoMetadata(searchPhotosRequest(query))
     }
 
     private fun fetchPhotoMetadata(flickrRequest: Call<FlickrResponse>)

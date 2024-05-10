@@ -45,6 +45,11 @@ dependencies {
     runtimeOnly("androidx.lifecycle:lifecycle-livedata-core:2.4.0")
 
     implementation ("androidx.core:core-ktx:1.0.0")
+    implementation(libs.androidx.work.runtime)
+
+    //可删除, 不必要
+    implementation ("androidx.browser:browser:1.0.0") //Chrome Custom Tab不必要
+    //可删除, 不必要
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

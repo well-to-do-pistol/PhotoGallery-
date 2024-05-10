@@ -1,5 +1,7 @@
 package com.bignerdranch.android.photogallery
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuInflater
@@ -38,12 +40,17 @@ class PhotoGalleryActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_exit -> {
-                this.finish()  // Close the activity
+                finishAffinity()  // Close all activities
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
+    companion object {
+        fun newIntent(context: Context): Intent {
+            return Intent(context, PhotoGalleryActivity::class.java)
+        } //启动函数, 能够运用Intent来启动应用自己, 将会被PollWorker调用, 把结果封装在一个PendingIntent, 然后设置给通知信息(以便实现点击通知即启动应用)
+    }
 
 }

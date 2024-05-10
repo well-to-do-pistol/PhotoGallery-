@@ -1,5 +1,6 @@
 package com.bignerdranch.android.photogallery
 
+import android.content.Intent
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -15,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
@@ -22,16 +24,27 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
 import com.bignerdranch.android.photogallery.api.FlickrApi
+import com.bignerdranch.android.photogallery.backstage.PhotoPageActivity
+import com.bignerdranch.android.photogallery.backstage.PollWorker
+import com.bignerdranch.android.photogallery.backstage.VisibleFragment
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "PhotoGalleryFragment"
+private const val POLL_WORK = "POLL_WORK"
 
-class PhotoGalleryFragment : Fragment() {
+class PhotoGalleryFragment : VisibleFragment() {
 
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
     private lateinit var photoRecyclerView: RecyclerView
@@ -132,21 +145,80 @@ class PhotoGalleryFragment : Fragment() {
                 searchView.setQuery(photoGalleryViewModel.searchTerm, false)
             }
         }
+
+        val toggleItem = menu.findItem(R.id.menu_item_toggle_polling)
+        val isPolling = QueryPreferences.isPolling(requireContext()) //在共享数据里拿isPolling
+        val toggleItemTitle = if (isPolling) {
+            R.string.stop_polling
+        } else {
+            R.string.start_polling
+        }
+        toggleItem.setTitle(toggleItemTitle) //根据isPolling对错来显示对应菜单项的标题(false则显示启动(证明服务没在运行需要你点击启动))
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.menu_item_clear -> {
-                photoGalleryViewModel.fetchPhotos("")
+                photoGalleryViewModel.fetchPhotos("") //设置为空, 共享数据存储的最后一次搜索也变空
                 true
+            }
+            R.id.menu_item_toggle_polling -> { //点击启停轮巡服务
+                val isPolling = QueryPreferences.isPolling(requireContext())
+                if (isPolling) { //true证明正在启用, 则(点击动作)要删除轮巡后台任务
+                    WorkManager.getInstance().cancelUniqueWork(POLL_WORK)
+                    QueryPreferences.setPolling(requireContext(), false) //设置共享数据的isPolling指示已停
+                } else { //false证明未启用, 则(点击动作)要启用轮巡后台任务
+                    val constraints = Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.UNMETERED) //限制为不计流量才启用
+                        .build()
+                    val periodicRequest = PeriodicWorkRequest //这里和OneTime相对
+                        .Builder(PollWorker::class.java, 15, TimeUnit.MINUTES) //设置时间为15分钟(最小间隔), 应用完全关闭都会执行
+                        .setConstraints(constraints)
+                        .build()
+                    WorkManager.getInstance().enqueueUniquePeriodicWork(
+                        POLL_WORK,
+                        ExistingPeriodicWorkPolicy.KEEP, //KEEP的意思是(对待已经安排好的具名工作任务)保留当前任务, 不更改它; REPLACE是替换
+                        periodicRequest //需要一个网络请求
+                    )
+                    QueryPreferences.setPolling(requireContext(), true) //设置共享数据的isPolling指示已启动
+                }
+                activity?.invalidateOptionsMenu() //通过调用“invalidateOptionsMenu()”，您可以触发(Fragment关联的)“Activity”刷新其菜单选项，这使您可以根据应用程序的状态动态更新这些提示。 这可确保用户界面保持直观并响应应用程序的功能
+                return true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
-    private class PhotoHolder(private val itemImageView: ImageView)
-        : RecyclerView.ViewHolder(itemImageView) {
+    private inner class PhotoHolder(private val itemImageView: ImageView)
+        : RecyclerView.ViewHolder(itemImageView), View.OnClickListener { //inner关键字能让类能访问外部类的属性和函数, 这里是调用Fragment.startActivity(Intent)
+
+        private lateinit var galleryItem: GalleryItem
+
+        init {
+            itemView.setOnClickListener(this) //继承, 重写, setOnClickListener三步棋, 喝水一样简单
+        }
+
         val bindDrawable: (Drawable) -> Unit  = itemImageView::setImageDrawable
+
+        fun bindGalleryItem(item: GalleryItem) {
+            galleryItem = item
+        }
+
+        override fun onClick(view: View) {
+//            val intent = Intent(Intent.ACTION_VIEW, galleryItem.photoPageUri) //使用隐式Intent启动浏览器访问图片url
+            val intent = PhotoPageActivity
+                .newIntent(requireContext(), galleryItem.photoPageUri) //创建Intent返回自己(传递了Url)
+            startActivity(intent)
+
+//                    CustomTabsIntent.Builder() //使用Chrome Custom Tab显示网页
+//                .setToolbarColor(ContextCompat.getColor(
+//                    requireContext(), R.color.purple_500))
+//                .setShowTitle(true)
+//                .build()
+//                .launchUrl(requireContext(), galleryItem.photoPageUri)
+        }//- **上下文和导航**：“Intent”是使用“requireContext()”方法创建的，该方法提供片段宿主活动的上下文。 此上下文是从片段启动另一个活动所必需的。
+//        - **Activity Stack**：当调用 `startActivity(intent)` 时，`PhotoPageActivity` 被放置在堆栈中当前 Activity 的顶部（大概是托管 `PhotoGalleryFragment` 的 Activity）。 这不会替换现有的活动，而是在其之上添加一个新层。
+
     }
 
     //为拿到layoutInflater把adapter变成内部类, 还方便后面访问父activity的属性和函数
@@ -169,6 +241,7 @@ class PhotoGalleryFragment : Fragment() {
 
         override fun onBindViewHolder(holder: PhotoHolder, position: Int) {
             val galleryItem = galleryItems[position]
+            holder.bindGalleryItem(galleryItem) //绑定galleryItem给Holder
             val placeholder: Drawable = ContextCompat.getDrawable(
                 requireContext(),
                 R.drawable.bill_up_close
