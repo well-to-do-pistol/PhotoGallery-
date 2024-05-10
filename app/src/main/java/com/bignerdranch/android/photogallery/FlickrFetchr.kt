@@ -44,8 +44,12 @@ class FlickrFetchr {
         flickrApi = retrofit.create(FlickrApi::class.java) // 创建 Flickr API 接口实例
     }
 
+    fun fetchPhotosRequest(): Call<PhotoResponse> { //暴露Call对象, 在init的时候已经配置好了 (后台轮巡需要的网络请求(看看有没有拿到第一个数据))
+        return flickrApi.workerPhotos()
+    }
+
     @WorkerThread //该注解指定函数只能在后台线程上执行(网络请求)
-    fun fetchPhoto(url: String): Bitmap? {
+    fun fetchPhoto(url: String): Bitmap? { //用url拿数据
         val response: Response<ResponseBody> = flickrApi.fetchUrlBytes(url).execute()
         //ResponseBody.byteStream得到InputStream
         //BitmapFactory.decodeStream(InputStream)创建Bitmap对象
@@ -55,13 +59,9 @@ class FlickrFetchr {
         return bitmap
     }
 
-    fun fetchPhotosRequest(): Call<PhotoResponse> { //暴露Call对象, 在init的时候已经配置好了
-        return flickrApi.fetchPhotos()
-    }
-
     fun fetchPhotos(): LiveData<List<GalleryItem>> {
         currentCall?.cancel() // 如果存在，取消之前的网络请求
-        return fetchPhotoMetadata(fetchPhotosRequest())
+        return fetchPhotoMetadata(fetchPhotosRequest()) //这里是用回原来的网络请求
     }
 
     fun searchPhotosRequest(query: String): Call<PhotoResponse> { //暴露Call对象, 在init的时候已经配置好了
@@ -105,4 +105,12 @@ class FlickrFetchr {
     fun cancel() {
         currentCall?.cancel() // 取消当前的网络请求
     }
+
+
+
+
+
+
+
+
 }
