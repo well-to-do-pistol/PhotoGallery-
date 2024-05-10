@@ -13,6 +13,7 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -133,6 +134,18 @@ class PhotoGalleryFragment : VisibleFragment() {
                 preloadOne(galleryItems) //预加载一次
 
             })
+
+        val layoutManager = GridLayoutManager(context, 3) // Default to 3, will adjust dynamically
+        photoRecyclerView.layoutManager = layoutManager
+        photoRecyclerView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                val columnWidth = resources.getDimension(R.dimen.column_width).toInt()
+                val screenWidth = photoRecyclerView.width
+                val numberOfColumns = screenWidth / columnWidth
+                layoutManager.spanCount = numberOfColumns
+                photoRecyclerView.viewTreeObserver.removeOnGlobalLayoutListener(this)
+            }
+        })
     }
 
     private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
