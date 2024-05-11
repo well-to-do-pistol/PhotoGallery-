@@ -29,6 +29,7 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.paging.PagingDataAdapter
+import androidx.paging.map
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -114,14 +115,14 @@ class PhotoGalleryFragment : VisibleFragment() {
 
         photoGalleryViewModel.galleryItemLiveData.observe(viewLifecycleOwner,
             Observer { pagingData ->
-                firstpreload(pagingData) //首次加载18张图片
+//                firstpreload(pagingData) //首次加载18张图片
 
 //                photoRecyclerView.adapter = PhotoAdapter(pagingData)
                 photoRecyclerView.post {
                     Log.d(TAG, "Is RecyclerView visible: ${photoRecyclerView.isShown}")
                 }
 
-                val adapter = PhotoAdapter()
+                val adapter = PhotoAdapter(null)
                 photoRecyclerView.adapter = adapter //定义photoRecyclerView的adapter
 
                 // This will log the type of galleryItemLiveData
@@ -134,7 +135,7 @@ class PhotoGalleryFragment : VisibleFragment() {
                     try {
                         if(pagingData == null){Log.i(TAG, "submit success")}
                         Log.d(TAG, "Submitting new paging data to adapter.$pagingData")
-                        adapter.submitData(pagingData)
+                        adapter.submitData(lifecycle,pagingData)
                         Log.i(TAG, "submit success")
                         photoRecyclerView.adapter = adapter
                     } catch (e: Exception) {
@@ -142,22 +143,22 @@ class PhotoGalleryFragment : VisibleFragment() {
                     }
                 }
 
-                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
-                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                        super.onScrolled(recyclerView, dx, dy)
-                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                        val totalItemCount = layoutManager.itemCount
-                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+//                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
+//                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+//                        super.onScrolled(recyclerView, dx, dy)
+//                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+//                        val totalItemCount = layoutManager.itemCount
+//                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+//
+//                        // Check if we've reached the threshold to preload more images
+//                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
+//                            Log.i(TAG, "gsize: ${pagingData.size}")
+//                            preloadImages(pagingData.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
+//                        }
+//                    }
+//                })
 
-                        // Check if we've reached the threshold to preload more images
-                        if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
-                            Log.i(TAG, "gsize: ${pagingData.size}")
-                            preloadImages(pagingData.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
-                        }
-                    }
-                })
-
-                preloadOne(galleryItems) //预加载一次
+//                preloadOne(galleryItems) //预加载一次
 
             })
 
@@ -309,7 +310,7 @@ class PhotoGalleryFragment : VisibleFragment() {
     }
 
     //为拿到layoutInflater把adapter变成内部类, 还方便后面访问父activity的属性和函数
-    private inner class PhotoAdapter(private val galleryItems: List<GalleryItem>)
+    private inner class PhotoAdapter(private val galleryItems: List<GalleryItem>?)
         : PagingDataAdapter<GalleryItem, PhotoHolder>(GalleryItemComparator) {
 
         override fun onCreateViewHolder(
@@ -324,17 +325,20 @@ class PhotoGalleryFragment : VisibleFragment() {
             return PhotoHolder(view)
         }
 
-        override fun getItemCount(): Int = galleryItems.size
+//        override fun getItemCount(): Int = galleryItems.size
 
         override fun onBindViewHolder(holder: PhotoHolder, position: Int) {
-            val galleryItem = galleryItems[position]
-            holder.bindGalleryItem(galleryItem) //绑定galleryItem给Holder
-            val placeholder: Drawable = ContextCompat.getDrawable(
-                requireContext(),
-                R.drawable.bill_up_close
-            ) ?: ColorDrawable()
-            holder.bindDrawable(placeholder)
-            thumbnailDownloader.queueThumbnail(holder, galleryItem.url)
+//            val galleryItem = galleryItems[position]
+            val galleryItem = getItem(position)
+            galleryItem?.let {
+                holder.bindGalleryItem(galleryItem) //绑定galleryItem给Holder
+                val placeholder: Drawable = ContextCompat.getDrawable(
+                    requireContext(),
+                    R.drawable.bill_up_close
+                ) ?: ColorDrawable()
+                holder.bindDrawable(placeholder)
+                thumbnailDownloader.queueThumbnail(holder, galleryItem.url)
+            }
         }
     }
 

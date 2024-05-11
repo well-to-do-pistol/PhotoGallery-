@@ -21,6 +21,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 private const val TAG = "FlickrFetchr"
 
 class FlickrFetchr (private val coroutineScope: CoroutineScope){
+
+
     private val flickrApi: FlickrApi
     private var currentCall: Call<PhotoResponse>? = null // 存储当前的网络请求
 

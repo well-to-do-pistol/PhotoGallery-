@@ -12,6 +12,7 @@ import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.viewModelScope
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "ThumbnailDownloader"
@@ -37,7 +38,7 @@ class ThumbnailDownloader<in T>(
     private val firstloadThread = HandlerThread("Thumbnailfirster") //首次预加载自己线程ThumbnailScroller
 
     private val requestMap = ConcurrentHashMap<T, String>() //线程安全的HashMap
-    private val flickrFetchr = FlickrFetchr() //发起一个网络请求就创建并配置一个Retrofit新实例
+    private val flickrFetchr = fakeFetchr() //发起一个网络请求就创建并配置一个Retrofit新实例
     private val preloadRequestSet = ConcurrentHashMap<String, Boolean>() //并发哈希映射(已经预加载的图片, 避免重复预加载)
 
     init {

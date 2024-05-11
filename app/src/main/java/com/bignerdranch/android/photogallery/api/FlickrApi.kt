@@ -26,4 +26,6 @@ interface FlickrApi {
     @GET("services/rest?method=flickr.interestingness.getList")
     fun workerPhotos(): Call<PhotoResponse>
 
+    @GET("services/rest?method=flickr.photos.search")
+    fun searchPhotos(@Query("text") query: String): Call<PhotoResponse> //Query允许动态拼接
 }

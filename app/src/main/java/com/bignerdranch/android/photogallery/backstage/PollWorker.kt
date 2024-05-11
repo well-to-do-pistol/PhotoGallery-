@@ -8,6 +8,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.viewModelScope
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.bignerdranch.android.photogallery.FlickrFetchr
@@ -16,6 +17,7 @@ import com.bignerdranch.android.photogallery.NOTIFICATION_CHANNEL_ID
 import com.bignerdranch.android.photogallery.PhotoGalleryActivity
 import com.bignerdranch.android.photogallery.QueryPreferences
 import com.bignerdranch.android.photogallery.R
+import com.bignerdranch.android.photogallery.fakeFetchr
 
 private const val TAG = "PollWorker"
 
@@ -28,13 +30,13 @@ class PollWorker(val context: Context, workerParams: WorkerParameters)
         val query = QueryPreferences.getStoredQuery(context)
         val lastResultId = QueryPreferences.getLastResultId(context)
         val items: List<GalleryItem> = if (query.isEmpty()) {
-            FlickrFetchr().fetchPhotosRequest() //没有最后搜索字符串, 就获取一般最新图片 (先拿到Call)
+            fakeFetchr().fetchPhotosRequest() //没有最后搜索字符串, 就获取一般最新图片 (先拿到Call)
                 .execute()
                 .body()
 //                ?.photos
                 ?.galleryItems
         } else {
-            FlickrFetchr().searchPhotosRequest(query)//有最后搜索字符串, 就获取匹配字符串的最新图片 (先拿到Call)
+            fakeFetchr().searchPhotosRequest(query)//有最后搜索字符串, 就获取匹配字符串的最新图片 (先拿到Call)
                 .execute()
                 .body()
 //                ?.photos
