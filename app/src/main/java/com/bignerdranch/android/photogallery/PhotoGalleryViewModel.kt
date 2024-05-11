@@ -7,13 +7,20 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
+import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.liveData
+import com.bignerdranch.android.photogallery.api.FlickrPagingSource
 
 
 private const val TAG = "PhotoGalleryViewModel"
 
 class PhotoGalleryViewModel(private val app: Application) : AndroidViewModel(app) { // AndroidViewModel让viewmodel能访问应用上下文, 因为它没上下文活得久, 所以引用上下文是安全的
-    private val flickrFetchr = FlickrFetchr()
-    val galleryItemLiveData: LiveData<List<GalleryItem>>
+    private val flickrFetchr = FlickrFetchr(viewModelScope)
+    val galleryItemLiveData: LiveData<PagingData<GalleryItem>>
 
     private val mutableSearchTerm = MutableLiveData<String>()
     val searchTerm: String
@@ -37,9 +44,14 @@ class PhotoGalleryViewModel(private val app: Application) : AndroidViewModel(app
 //            }
             _isLoading.value = true //网络请求正在进行
             val liveData = if (searchTerm.isBlank()) {
-                flickrFetchr.fetchPhotos() // Assuming this is your existing method
+                Pager(PagingConfig(pageSize = 100)) { //Pager()创建一个Pager对象, 用PagingConfig配置, pageSize表明一页(的大小)有多少数据
+                    FlickrPagingSource(flickrFetchr, null)
+                }.liveData
+                    .cachedIn(viewModelScope) // Assuming this is your existing method
             } else {
-                flickrFetchr.searchPhotos(searchTerm) // Assuming this is your existing method
+                Pager(PagingConfig(pageSize = 100)) {
+                    FlickrPagingSource(flickrFetchr, searchTerm)
+                }.liveData.cachedIn(viewModelScope)
             }
 
             //该方法允许您设置没有生命周期的观察者。 它将接收所有事件，当不再需要时您需要手动将其删除。 在您的情况下，它用于在数据获取完成时更新“_isLoading”，无论生命周期状态如何，因为此观察是在 ViewModel 中手动管理的
@@ -57,6 +69,7 @@ class PhotoGalleryViewModel(private val app: Application) : AndroidViewModel(app
         QueryPreferences.setStoredQuery(app, query) //设置存储的值
         mutableSearchTerm.value = query
     }
+
 
     override fun onCleared() {
         super.onCleared()

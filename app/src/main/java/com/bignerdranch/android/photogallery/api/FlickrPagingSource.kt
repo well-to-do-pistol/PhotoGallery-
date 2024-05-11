@@ -10,11 +10,16 @@ import java.io.IOException
 
 private const val TAG = "FlickrPagingSource"
 
-class FlickrPagingSource(private val flickrFetchr: FlickrFetchr) : PagingSource<Int, GalleryItem>() {
+class FlickrPagingSource(private val flickrFetchr: FlickrFetchr, private val query: String?) : PagingSource<Int, GalleryItem>() {
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, GalleryItem> {
         val position = params.key ?: 1
         return try {
-            val items = flickrFetchr.fetchPhotos(position)
+            val items =
+            if(query.isNullOrEmpty()){
+                 flickrFetchr.fetchPhotos(position)
+            }else{  flickrFetchr.searchPhotos(query, position)}
+
+
             LoadResult.Page(
                 data = items,
                 prevKey = if (position == 1) null else position - 1,

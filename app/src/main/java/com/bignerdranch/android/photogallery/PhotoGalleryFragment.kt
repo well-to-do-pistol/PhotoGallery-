@@ -27,6 +27,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.paging.PagingDataAdapter
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,6 +43,8 @@ import com.bignerdranch.android.photogallery.api.FlickrApi
 import com.bignerdranch.android.photogallery.backstage.PhotoPageActivity
 import com.bignerdranch.android.photogallery.backstage.PollWorker
 import com.bignerdranch.android.photogallery.backstage.VisibleFragment
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -99,22 +104,43 @@ class PhotoGalleryFragment : VisibleFragment() {
     //观察ViewModel的LiveData
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) { //还要在UI相关部件(RecyclerView adapter)响应数据变化, 确保UI已初始化完成
         super.onViewCreated(view, savedInstanceState)
+        // Define the CoroutineExceptionHandler
+        val errorHandler = CoroutineExceptionHandler { _, exception ->
+            Log.e(TAG, "Error in submitData process: $exception")
+        }
         photoGalleryViewModel.isLoading.observe(viewLifecycleOwner, Observer { isLoading ->
             progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
         })
 
-        photoGalleryViewModel.galleryItemLiveData.observe(
-            //LifecycleOwner 负责根据组件（在本例中为片段）的生命周期状态观察 LiveData 的变化
-            //如果您要将“this”（片段本身）作为“LifecycleOwner”传递：
-            //LiveData 将根据片段实例的生命周期观察变化。 如果片段的视图被破坏，
-            // 但片段实例仍在内存中（就像添加到返回堆栈时一样），这可能会导致问题。
-            // 由于片段实例的生命周期比其视图更长，因此即使片段的视图不活动，您最终也可能会看到观察者处于活动状态，
-            // 这可能会导致内存泄漏和不必要的更新。
-            viewLifecycleOwner,
-            Observer { galleryItems ->
-                firstpreload(galleryItems) //首次加载18张图片
+        photoGalleryViewModel.galleryItemLiveData.observe(viewLifecycleOwner,
+            Observer { pagingData ->
+                firstpreload(pagingData) //首次加载18张图片
 
-                photoRecyclerView.adapter = PhotoAdapter(galleryItems)
+//                photoRecyclerView.adapter = PhotoAdapter(pagingData)
+                photoRecyclerView.post {
+                    Log.d(TAG, "Is RecyclerView visible: ${photoRecyclerView.isShown}")
+                }
+
+                val adapter = PhotoAdapter()
+                photoRecyclerView.adapter = adapter //定义photoRecyclerView的adapter
+
+                // This will log the type of galleryItemLiveData
+                Log.d(TAG, "Type of galleryItemLiveData: ${pagingData::class.java}")
+
+                // This will log the instance of galleryItemLiveData
+                Log.d(TAG, "Instance of galleryItemLiveData: $pagingData")
+
+                viewLifecycleOwner.lifecycleScope.launch(errorHandler) {
+                    try {
+                        if(pagingData == null){Log.i(TAG, "submit success")}
+                        Log.d(TAG, "Submitting new paging data to adapter.$pagingData")
+                        adapter.submitData(pagingData)
+                        Log.i(TAG, "submit success")
+                        photoRecyclerView.adapter = adapter
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error submitting data to adapter: $e")
+                    }
+                }
 
                 photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -125,8 +151,8 @@ class PhotoGalleryFragment : VisibleFragment() {
 
                         // Check if we've reached the threshold to preload more images
                         if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
-                            Log.i(TAG, "gsize: ${galleryItems.size}")
-                            preloadImages(galleryItems.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
+                            Log.i(TAG, "gsize: ${pagingData.size}")
+                            preloadImages(pagingData.subList(lastVisibleItem + 1, min(lastVisibleItem + 1 + PRELOAD_AMOUNT, galleryItems.size)))
                         }
                     }
                 })
@@ -284,7 +310,7 @@ class PhotoGalleryFragment : VisibleFragment() {
 
     //为拿到layoutInflater把adapter变成内部类, 还方便后面访问父activity的属性和函数
     private inner class PhotoAdapter(private val galleryItems: List<GalleryItem>)
-        : RecyclerView.Adapter<PhotoHolder>() {
+        : PagingDataAdapter<GalleryItem, PhotoHolder>(GalleryItemComparator) {
 
         override fun onCreateViewHolder(
             parent: ViewGroup,
@@ -316,5 +342,12 @@ class PhotoGalleryFragment : VisibleFragment() {
         const val PRELOAD_THRESHOLD = 100 // Start preloading 20 items before reaching the last visible item
         const val PRELOAD_AMOUNT = 25 // Number of items to preload
         fun newInstance() = PhotoGalleryFragment()
+        private val GalleryItemComparator = object : DiffUtil.ItemCallback<GalleryItem>() {
+            override fun areItemsTheSame(oldItem: GalleryItem, newItem: GalleryItem): Boolean =
+                oldItem.id == newItem.id
+
+            override fun areContentsTheSame(oldItem: GalleryItem, newItem: GalleryItem): Boolean =
+                oldItem == newItem
+        }
     }
 }
