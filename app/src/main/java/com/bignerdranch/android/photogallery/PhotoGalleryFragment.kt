@@ -28,6 +28,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.paging.PagingData
 import androidx.paging.PagingDataAdapter
 import androidx.paging.map
 import androidx.recyclerview.widget.DiffUtil
@@ -44,6 +45,7 @@ import com.bignerdranch.android.photogallery.api.FlickrApi
 import com.bignerdranch.android.photogallery.backstage.PhotoPageActivity
 import com.bignerdranch.android.photogallery.backstage.PollWorker
 import com.bignerdranch.android.photogallery.backstage.VisibleFragment
+import com.bumptech.glide.Glide
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import retrofit2.Call
@@ -135,14 +137,13 @@ class PhotoGalleryFragment : VisibleFragment() {
                     try {
                         if(pagingData == null){Log.i(TAG, "submit success")}
                         Log.d(TAG, "Submitting new paging data to adapter.$pagingData")
-                        adapter.submitData(lifecycle,pagingData)
+                        adapter.submitData(lifecycle,pagingData) //添加lifecycle, 分页功能和生命周期配合, 死掉停止分页更新
                         Log.i(TAG, "submit success")
                         photoRecyclerView.adapter = adapter
                     } catch (e: Exception) {
                         Log.e(TAG, "Error submitting data to adapter: $e")
                     }
                 }
-
 //                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() { //观察滚动行为
 //                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
 //                        super.onScrolled(recyclerView, dx, dy)
@@ -160,6 +161,21 @@ class PhotoGalleryFragment : VisibleFragment() {
 
 //                preloadOne(galleryItems) //预加载一次
 
+                // Set up the scroll listener for preloading
+                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        super.onScrolled(recyclerView, dx, dy)
+                        if (recyclerView.layoutManager is GridLayoutManager) {
+                            val layoutManager = recyclerView.layoutManager as GridLayoutManager
+                            val totalItemCount = layoutManager.itemCount
+                            val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+                            if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
+                                preloadImageS(pagingData, totalItemCount, lastVisibleItem)
+                            }
+                        }
+                    }
+                })
+
             })
 
         val layoutManager = GridLayoutManager(context, 3) // Default to 3, will adjust dynamically
@@ -173,6 +189,19 @@ class PhotoGalleryFragment : VisibleFragment() {
                 photoRecyclerView.viewTreeObserver.removeOnGlobalLayoutListener(this)
             }
         })
+    }
+
+    private fun preloadImageS(pagingData: PagingData<GalleryItem>, totalItemCount: Int, lastVisibleItem: Int) {
+        val imageUrls = pagingData.map { it.url } // Assuming 'pagingData' can be directly mapped to image URLs
+        val context = requireContext()
+        lifecycleScope.launch {
+            imageUrls.collect { urls ->
+                for (i in lastVisibleItem + 1 until min(totalItemCount, lastVisibleItem + PRELOAD_AMOUNT)) {
+                    val imageUrl = urls[i]
+                    Glide.with(context).load(imageUrl).preload()
+                }
+            }
+        }
     }
 
     private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
