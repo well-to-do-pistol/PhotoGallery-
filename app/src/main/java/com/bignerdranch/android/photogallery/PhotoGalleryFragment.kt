@@ -30,6 +30,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.paging.PagingData
 import androidx.paging.PagingDataAdapter
+import androidx.paging.filter
 import androidx.paging.map
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
@@ -159,22 +160,29 @@ class PhotoGalleryFragment : VisibleFragment() {
 //                    }
 //                })
 
-//                preloadOne(galleryItems) //预加载一次
+//                preloadOne(pagingData) //预加载一次
+//                viewLifecycleOwner.lifecycleScope.launch {
+//                    pagingData.collect { flow ->
+//                        // Access the items in the page
+//                        val galleryItems = flow.items
+//                        // Preload images for these items
+//                        preloadImages(galleryItems)
+//                    }
+//                }
 
-                // Set up the scroll listener for preloading
+
                 photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                         super.onScrolled(recyclerView, dx, dy)
-                        if (recyclerView.layoutManager is GridLayoutManager) {
-                            val layoutManager = recyclerView.layoutManager as GridLayoutManager
-                            val totalItemCount = layoutManager.itemCount
-                            val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                            if (totalItemCount <= lastVisibleItem + PRELOAD_THRESHOLD) {
-                                preloadImageS(pagingData, totalItemCount, lastVisibleItem)
-                            }
-                        }
+                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+                        val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
+                        val lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition()
+
+                        // Update preload set
+                        updatePreloadRequestSet(firstVisibleItemPosition, lastVisibleItemPosition)
                     }
                 })
+
 
             })
 
@@ -191,18 +199,22 @@ class PhotoGalleryFragment : VisibleFragment() {
         })
     }
 
-    private fun preloadImageS(pagingData: PagingData<GalleryItem>, totalItemCount: Int, lastVisibleItem: Int) {
-        val imageUrls = pagingData.map { it.url } // Assuming 'pagingData' can be directly mapped to image URLs
-        val context = requireContext()
-        lifecycleScope.launch {
-            imageUrls.collect { urls ->
-                for (i in lastVisibleItem + 1 until min(totalItemCount, lastVisibleItem + PRELOAD_AMOUNT)) {
-                    val imageUrl = urls[i]
-                    Glide.with(context).load(imageUrl).preload()
-                }
-            }
+    fun updatePreloadRequestSet(firstVisibleItem: Int, lastVisibleItem: Int) {
+        val preloadRange = 20  // Number of items beyond the visible range to keep preloaded
+
+        // Determine the range of item positions that should be kept in the preload set
+        val validPreloadRange = (firstVisibleItem - preloadRange)..(lastVisibleItem + preloadRange)
+
+        // Filter out URLs that are outside this range
+        val keysToRemove = thumbnailDownloader.preloadRequestSet.keys.filter { key ->
+            val position = photoGalleryViewModel.getPositionForKey(key)
+            position !in validPreloadRange
         }
+
+        // Remove the filtered keys
+        keysToRemove.forEach { preloadRequestSet.remove(it) }
     }
+
 
     private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
         galleryItems.forEach { thumbnailDownloader.scrollThumbnail(it.url) }
@@ -367,6 +379,33 @@ class PhotoGalleryFragment : VisibleFragment() {
                 ) ?: ColorDrawable()
                 holder.bindDrawable(placeholder)
                 thumbnailDownloader.queueThumbnail(holder, galleryItem.url)
+
+                // firstloadThumbnail, preloadThumbnail, scrollThumbnail
+                val firstloadPosition = position + 4
+                if (firstloadPosition < itemCount) {
+//                    Log.d(TAG,"itemCount:${itemCount}")
+//                    Log.d(TAG,"preloadPosition:${firstloadPosition}")
+                    val preloadItem = getItem(firstloadPosition)
+                    preloadItem?.let {
+                        thumbnailDownloader.firstloadThumbnail(it.url)
+                    }
+                }
+                val preloadPosition = position + PRELOAD_AMOUNT
+                if (preloadPosition < itemCount) {
+//                    Log.d(TAG,"preloadPosition:${preloadPosition}")
+                    val preloadItem = getItem(preloadPosition)
+                    preloadItem?.let {
+                        thumbnailDownloader.preloadThumbnail(it.url)
+                    }
+                }
+                val scrollPosition = position + PRELOAD_AMOUNT + PRELOAD_AMOUNT
+                if (scrollPosition < itemCount) {
+//                    Log.d(TAG,"scrollPosition:${scrollPosition}")
+                    val preloadItem = getItem(scrollPosition)
+                    preloadItem?.let {
+                        thumbnailDownloader.scrollThumbnail(it.url)
+                    }
+                }
             }
         }
     }
