@@ -169,21 +169,6 @@ class PhotoGalleryFragment : VisibleFragment() {
 //                        preloadImages(galleryItems)
 //                    }
 //                }
-
-
-                photoRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                        super.onScrolled(recyclerView, dx, dy)
-                        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                        val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
-                        val lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition()
-
-                        // Update preload set
-                        updatePreloadRequestSet(firstVisibleItemPosition, lastVisibleItemPosition)
-                    }
-                })
-
-
             })
 
         val layoutManager = GridLayoutManager(context, 3) // Default to 3, will adjust dynamically
@@ -198,23 +183,6 @@ class PhotoGalleryFragment : VisibleFragment() {
             }
         })
     }
-
-    fun updatePreloadRequestSet(firstVisibleItem: Int, lastVisibleItem: Int) {
-        val preloadRange = 20  // Number of items beyond the visible range to keep preloaded
-
-        // Determine the range of item positions that should be kept in the preload set
-        val validPreloadRange = (firstVisibleItem - preloadRange)..(lastVisibleItem + preloadRange)
-
-        // Filter out URLs that are outside this range
-        val keysToRemove = thumbnailDownloader.preloadRequestSet.keys.filter { key ->
-            val position = photoGalleryViewModel.getPositionForKey(key)
-            position !in validPreloadRange
-        }
-
-        // Remove the filtered keys
-        keysToRemove.forEach { preloadRequestSet.remove(it) }
-    }
-
 
     private fun preloadImages(galleryItems: List<GalleryItem>) { //预加载函数
         galleryItems.forEach { thumbnailDownloader.scrollThumbnail(it.url) }

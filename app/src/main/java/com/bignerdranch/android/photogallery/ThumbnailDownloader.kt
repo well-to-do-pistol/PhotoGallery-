@@ -146,26 +146,44 @@ class ThumbnailDownloader<in T>(
 
     fun preloadThumbnail(url: String) {
         if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
+            Log.d(TAG, "zzz2")
             preloadHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget() //放进自己的预加载线程
         } //第一次请求, 只是下载图片就够了
+        else if (preloadRequestSet.putIfAbsent(url, true) != null){
+            preloadRequestSet.remove(url)
+        }
     }
 
     fun firstloadThumbnail(url: String) {
         if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
+            Log.d(TAG, "zzz1")
             firstloadHandler.obtainMessage(MESSAGE_FIRSTLOAD, url).sendToTarget() //放进自己的预加载线程
         } //第一次请求, 只是下载图片就够了
+        else if (preloadRequestSet.putIfAbsent(url, true) != null){
+            preloadRequestSet.remove(url)
+        }
     }
 
     fun scrollThumbnail(url: String){
         if (lruCache.get(url) == null && preloadRequestSet.putIfAbsent(url, true) == null) { //如果映射有, 则返回true, 确保只预加载一次, 防止缓存满了之后又预加载20个图片
+            Log.d(TAG, "zzz3")
             scrollHandler.obtainMessage(MESSAGE_SCROLL, url).sendToTarget() //放进自己的预加载线程
         } //第一次请求, 只是下载图片就够了
+        else if (preloadRequestSet.putIfAbsent(url, true) != null){
+            preloadRequestSet.remove(url)
+        }
     }
 
     private fun handleRequest(target: T?, url: String, isPreload: Boolean) {
-        val bitmap = lruCache[url] ?: flickrFetchr.fetchPhoto(url)?.also {
-            lruCache.put(url, it)
-        } //从缓存拿图片, 没有就下载并放到缓存
+        val bitmap = try {
+            lruCache[url] ?: flickrFetchr.fetchPhoto(url)?.also {
+                lruCache.put(url, it)
+            } //从缓存拿图片, 没有就下载并放到缓存
+        }catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch image from $url with error: ${e.message}")
+            null // Handle error by returning null
+        }
+
 
         if (!isPreload && target != null && requestMap[target] == url && !hasQuit) {
             responseHandler.post { requestMap.remove(target) //清理target和url (这是是确保holder和url匹配的东西, 既然正常加载了就去除)
